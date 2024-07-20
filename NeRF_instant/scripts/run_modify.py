@@ -36,35 +36,54 @@ import csv
 import time
 
 def flip_matrix(m):
-	c2w = np.linalg.inv(m)
-	c2w[0:3,2] *= -1 # flip the y and z axis
-	c2w[0:3,1] *= -1
-	c2w = c2w[[1,0,2,3],:]
-	c2w[2,:] *= -1 # flip whole world upside down
-	return c2w
+    # Compute the inverse of the input matrix `m`
+    c2w = np.linalg.inv(m)
+    
+    # Flip the y and z axes by negating corresponding columns
+    c2w[0:3, 2] *= -1
+    c2w[0:3, 1] *= -1
+    
+    # Reorder rows to change the orientation
+    c2w = c2w[[1, 0, 2, 3], :]
+    
+    # Flip the whole world upside down by negating the third row
+    c2w[2, :] *= -1
+    
+    return c2w
 
 def rotation_matrix_to_vector(matrix):
+    # Extract the third column vector from the rotation matrix
     old_vec = matrix[:, 2]
+    
+    # Create a vector representing the rotated orientation
     vec = [-old_vec[1], -old_vec[2], -old_vec[0]]
+    
     return vec
 
 def rotation_matrix_z(angle_deg):
+    # Convert angle from degrees to radians
     angle_rad = np.deg2rad(angle_deg)
 
+    # Compute cosine and sine of the angle
     cos_theta = np.cos(angle_rad)
     sin_theta = np.sin(angle_rad)
 
+    # Create a 3x3 rotation matrix around the z-axis
     return np.array([
         [cos_theta, -sin_theta, 0],
         [sin_theta, cos_theta, 0],
         [0, 0, 1]
     ])
+
 def rotation_matrix_x(angle_deg):
+    # Convert angle from degrees to radians
     angle_rad = np.deg2rad(angle_deg)
 
+    # Compute cosine and sine of the angle
     cos_theta = np.cos(angle_rad)
     sin_theta = np.sin(angle_rad)
 
+    # Create a 3x3 rotation matrix around the x-axis
     return np.array([
         [1, 0, 0],
         [0, cos_theta, -sin_theta],
@@ -72,11 +91,14 @@ def rotation_matrix_x(angle_deg):
     ])
 
 def rotation_matrix_y(angle_deg):
+    # Convert angle from degrees to radians
     angle_rad = np.deg2rad(angle_deg)
 
+    # Compute cosine and sine of the angle
     cos_theta = np.cos(angle_rad)
     sin_theta = np.sin(angle_rad)
 
+    # Create a 3x3 rotation matrix around the y-axis
     return np.array([
         [cos_theta, 0, sin_theta],
         [0, 1, 0],
@@ -85,14 +107,18 @@ def rotation_matrix_y(angle_deg):
 
 def calculate_relative_positions(base_pos, stream):
     relative_stream = []
+    
     for i, data in stream:
-        # Assuming the last column of both base_pos and data arrays hold the relevant 3D positions
+        # Extract the last column of both base_pos and data arrays which hold the relevant 3D positions
         base_column = base_pos[:3, -1]
         data_column = data[:3, -1]
         
-        # Subtract the two columns to get the relative position
+        # Calculate the relative position by subtracting corresponding columns
         relative_data = data_column - base_column
+        
+        # Append the index 'i' and the relative position as a list to relative_stream
         relative_stream.append([i, list(relative_data)])
+    
     return relative_stream
 
 def parse_args():
@@ -148,12 +174,14 @@ def parse_args():
 	# parser.add_argument("--row", default="c:/Users/camp/Documents/Xinrui Zou/Tool-ROM/plexy_pointer.rom", help="used only when there is a ndi")
 	# parser.add_argument("--calibration", default="C:/Users/camp/GIT/arthro_nerf/camera_calibration/handeye_matrix_new_2.csv")
 	parser.add_argument("--calibration", default="C:/Users/camp/GIT/arthro_nerf/handeye-v2/handeye_matrix.csv")
+	# handeye_matrix.csv is the calicration matrix of the hand eye calibration.
 	parser.add_argument("--world_center", default="C:/Users/camp/GIT/arthro_nerf/Newplatformar/world_center.pkl")
+	# world_center.pkl is the position of the 3D reconstruction center which is saved during the data collection.
 	# parser.add_argument("--post_R", default="C:/Users/camp/GIT/arthro_nerf/LEGO/postprocess-R.pkl")
 	parser.add_argument("--post_info", default="C:/Users/camp/GIT/arthro_nerf/Newplatformar/postprocess-info.pkl")
 	parser.add_argument("--evaluation_list", default="C:/Users/camp/GIT/arthro_nerf/Newplatformar/evaluation.csv")
 
-	# Evaluation
+	# Evaluation of the user study
 	parser.add_argument("--evaluation",action="store_true", help="Whether to do the evaluation with baseboard")
 	parser.add_argument("--base_pose",  default="C:/Users/camp/GIT/arthro_nerf/utils/evaluations/base_pose.pickle", help="used only when there is a ndi")
 	parser.add_argument("--user_id", type=float, default=0, help="get the user number")
@@ -326,31 +354,17 @@ if __name__ == "__main__":
 						transform_matrix = tracking[0]
 						# print("T1", transform_matrix)
 
-						# ####### 1. handeye calibration
+						# handeye calibration
 						transform_matrix = camera2tool @ np.linalg.inv(transform_matrix)
-						# print("T2", transform_matrix)
-						# ####### 2. use world center as origin ############
-						# print("tool2camera", tool2camera)
+
 						transform_matrix = transform_matrix @ world_center @ tool2camera
-						# print("T3", transform_matrix)
 
-						# # 1,2 Get right matix direction.
 
-						# transform_matrix = transform_matrix @ world_center
-						# print("T2", transform_matrix)
-						# ####### 3. flip matrix (from opencv to opengl and from w2c to c2w)
-						transform_matrix = flip_matrix(transform_matrix)
-						# # # ####### 4. add ....
-						# transform_matrix = np.matmul(post_R, transform_matrix)
-                        # # # # ####### 5.
-						# transform_matrix[0:3, 3] -= post_totp
-                        # # # ####### 6.
 						avg_post_avglen = sum(post_avglen) / len(post_avglen)
-						# print("T4", transform_matrix)
+
 						transform_matrix[0:3, 3] *= 4.0 / avg_post_avglen  # scale to "nerf sized"
-						#transform_matrix = transform_matrix.tolist()
-						# print(transform_matrix)
 						tran_vec = transform_matrix[[0,1,2],-1]
+						# setting the center of the graph on the screen
 						center = [0.5,-0.50478,0]
 
 						
